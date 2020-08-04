@@ -1,0 +1,13 @@
+{"GET":{"scheme":"https","host":"haoa.haozuida.com","filename":"/20180711/rFY355Nh/800kb/hls/index.m3u8"}}
+{"GET":{"scheme":"https","host":"haoa.haozuida.com","filename":"/20180711/1RMLqqE6/index.m3u8"}}
+
+lq
+rttk
+隆行通讯
+心交社
+模特展示
+{"GET":{"scheme":"https","host":"haoa.haozuida.com","filename":"/20180711/Zvsoy0mK/index.m3u8"}} 11
+{"GET":{"scheme":"https","host":"haoa.haozuida.com","filename":"/20180711/1RMLqqE6/index.m3u8"}} 08
+{"GET":{"scheme":"https","host":"haoa.haozuida.com","filename":"/20180711/Ry1aHLcJ/index.m3u8"}} 09
+{"GET":{"scheme":"https","host":"haoa.haozuida.com","filename":"/20180711/ElveZFKK/index.m3u8","remote":{"地址":"145.14.132.60:443"}}} 10
+{"GET":{"scheme":"https","host":"haoa.haozuida.com","filename":"/20180711/rFY355Nh/index.m3u8"}} 05
