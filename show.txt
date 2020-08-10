@@ -11,3 +11,274 @@ rttk
 {"GET":{"scheme":"https","host":"haoa.haozuida.com","filename":"/20180711/Ry1aHLcJ/index.m3u8"}} 09
 {"GET":{"scheme":"https","host":"haoa.haozuida.com","filename":"/20180711/ElveZFKK/index.m3u8","remote":{"地址":"145.14.132.60:443"}}} 10
 {"GET":{"scheme":"https","host":"haoa.haozuida.com","filename":"/20180711/rFY355Nh/index.m3u8"}} 05
+
+
+const methods
+const statucodes
+const mimetype
+compress
+
+*char url_encode(*char)
+*char url_decode(*char)
+
+*char http_request_get_head(*http_request,*char)
+*char http_request_get_method(*http_request)
+*char http_request_get_path(*http_request)
+*char http_request_get_schema(*http_request)
+*char http_request_get_version(*http_request)
+*char http_request_get_query_parameter(*http_request)
+**char http_request_get_query_parameters(*http_request,*int)
+*char http_request_get_form_parameter(*http_request)
+**char http_request_get_form_parameters(*http_request,*int)
+int http_request_read_from_body(*http_request,*char,int,int) 
+
+void http_response_set_head(*http_response,*char,*char)
+void http_response_set_schema(*http_response,*char)
+void http_response_set_version(*http_response,*char)
+*char http_response_set_statuscode(*http_response,int)
+*char http_response_set_head(*http_response)
+int http_response_write_to_body(*http_response,*char,int,int) 
+
+typedef struct {                                                                                                                                                                                         typedef struct{
+    // request_line
+    // heads
+    // body_read
+    impletement_data *void
+    get_head_func *char http_request_get_head(*http_request,*char)
+    get_method_func *char http_request_get_method(*http_request)
+    get_path_func *char http_request_get_path(*http_request)
+    get_schema_func *char http_request_get_schema(*http_request)
+    get_version_func *char http_request_get_version(*http_request)
+    get_query_parameter_func *char http_request_get_query_parameter(*http_request)
+    get_query_parameters_func **char http_request_get_query_parameters(*http_request,*int)
+    get_form_parameter_func *char http_request_get_form_parameter(*http_request)
+    get_form_parameters_func **char http_request_get_form_parameters(*http_request,*int)
+    read_body_func int http_request_read_from_body(*http_request,*char,int,int) 
+}http_request;                                      
+
+typedef struct{
+    // response_line
+    // heads                                                                                                   
+    // body_write
+    impletement_data *void
+    set_status_func void http_response_set_statuscode(*http_response,int)
+    set_head_func void http_response_set_head(*http_response,*char,*char)
+}http_response;
+
+typedef struct{
+    remote_host *char
+    remote_port int
+    user_host *char
+    user_port int
+
+    pwd
+    pid
+}request_context
+
+*char application(*request_context request,response)
+
+
+OS.Env
+
+in env K SHELL ,v /usr/bin/zsh
+
+in env K SESSION_MANAGER ,v local/wutao-pc:@/tmp/.ICE-unix/1088,unix/wutao-pc:/tmp/.ICE-unix/1088
+in env K DESKTOP_SESSION ,v xfce
+
+in env K XDG_CONFIG_DIRS ,v /etc/xdg
+in env K XDG_SESSION_PATH ,v /org/freedesktop/DisplayManager/Session0
+in env K XDG_MENU_PREFIX ,v xfce-
+in env K XDG_SEAT ,v seat0
+in env K XDG_SESSION_DESKTOP ,v xfce
+in env K XDG_SESSION_TYPE ,v x11
+
+
+
+in env K GTK_IM_MODULE ,v fcitx
+in env K GTK_MODULES ,v canberra-gtk-module:canberra-gtk-module
+
+in env K LC_ADDRESS ,v zh_CN.UTF-8
+in env K LC_NAME ,v zh_CN.UTF-8
+in env K LC_MONETARY ,v zh_CN.UTF-8
+in env K LC_PAPER ,v zh_CN.UTF-8
+
+
+in env K SSH_AUTH_SOCK ,v /tmp/ssh-NKuB2F4NH5sx/agent.1136
+in env K SSH_AGENT_PID ,v 1137
+
+in env K XMODIFIERS ,v @im=fcitx
+
+
+in env K QT_QPA_PLATFORMTHEME ,v qt5ct
+in env K PANEL_GDK_CORE_DEVICE_EVENTS ,v 0
+
+
+in env K EDITOR ,v /usr/bin/vim
+
+
+in env K LOGNAME ,v wutao
+
+in env K PWD ,v /home/wutao/gits/webpy
+in env K HOME ,v /home/wutao
+in env K USER ,v wutao
+
+
+in env K XAUTHORITY ,v /home/wutao/.Xauthority
+
+
+
+
+in env K GOROOT ,v /home/wutao/go114
+
+in env K XDG_GREETER_DATA_DIR ,v /var/lib/lightdm-data/wutao
+
+in env K GTK2_RC_FILES ,v /home/wutao/.gtkrc-2.0
+in env K QT_IM_MODULE ,v fcitx
+
+
+
+in env K LC_IDENTIFICATION ,v zh_CN.UTF-8
+in env K LC_TIME ,v zh_CN.UTF-8
+in env K LANG ,v zh_CN.UTF-8
+
+in env K XDG_CURRENT_DESKTOP ,v XFCE
+in env K XDG_SEAT_PATH ,v /org/freedesktop/DisplayManager/Seat0
+in env K XDG_SESSION_CLASS ,v user
+in env K XDG_SESSION_ID ,v 2
+in env K XDG_VTNR ,v 7
+in env K XDG_RUNTIME_DIR ,v /run/user/1000
+in env K DISPLAY ,v :0.0
+in env K SHLVL ,v 1
+
+
+
+
+
+in env K PATH ,v /home/wutao/anaconda3/condabin:/home/wutao/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/lib/jvm/default/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl:/home/wutao/go114/bin:/home/wutao/bin:/home/wutao/go114/bin
+
+
+
+in env K LC_TELEPHONE ,v zh_CN.UTF-8
+in env K LC_MEASUREMENT ,v zh_CN.UTF-8
+
+
+
+in env K MAIL ,v /var/spool/mail/wutao
+
+
+in env K MOZ_PLUGIN_PATH ,v /usr/lib/mozilla/plugins
+
+
+
+in env K XDG_DATA_DIRS ,v /usr/local/share:/usr/share
+
+
+in env K GDMSESSION ,v xfce
+
+in env K DBUS_SESSION_BUS_ADDRESS ,v unix:path=/run/user/1000/bus
+
+in env K HG ,v /usr/bin/hg
+
+
+in env K LC_NUMERIC ,v zh_CN.UTF-8
+
+in env K GOPATH ,v /home/wutao/gits/gospace
+
+in env K APPLICATION_INSIGHTS_NO_DIAGNOSTIC_CHANNEL ,v true
+
+in env K NO_AT_BRIDGE ,v 1
+
+in env K CHROME_DESKTOP ,v code-oss.desktop
+
+in env K TERM_PROGRAM ,v vscode
+
+in env K TERM_PROGRAM_VERSION ,v 1.47.1
+
+in env K COLORTERM ,v truecolor
+
+in env K VSCODE_GIT_IPC_HANDLE ,v /run/user/1000/vscode-git-1ce3d62b0b.sock
+
+in env K GIT_ASKPASS ,v /usr/lib/code/extensions/git/dist/askpass.sh
+
+in env K VSCODE_GIT_ASKPASS_NODE ,v /usr/lib/electron7/electron
+
+in env K VSCODE_GIT_ASKPASS_MAIN ,v /usr/lib/code/extensions/git/dist/askpass-main.js
+
+in env K TERM ,v xterm-256color
+
+in env K OLDPWD ,v /home/wutao/gits/webpy
+
+in env K ZSH ,v /home/wutao/.oh-my-zsh
+
+in env K PAGER ,v less
+
+in env K LESS ,v -R
+
+in env K LSCOLORS ,v Gxfxcxdxbxegedabagacad
+
+in env K LS_COLORS ,v rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:
+
+in env K CONDA_EXE ,v /home/wutao/anaconda3/bin/conda
+
+in env K _CE_M ,v 
+
+in env K _CE_CONDA ,v 
+
+in env K CONDA_PYTHON_EXE ,v /home/wutao/anaconda3/bin/python
+
+in env K CONDA_SHLVL ,v 0
+--------------------------------------------------------------
+in env K _ ,v /usr/bin/python
+
+in env K SERVER_NAME ,v wutao-pc
+
+in env K GATEWAY_INTERFACE ,v CGI/1.1
+in env K SERVER_SOFTWARE ,v WSGIServer/0.2
+
+in env K SCRIPT_NAME ,v 
+
+
+in env K SERVER_PORT ,v 8000
+
+in env K REMOTE_HOST ,v 
+in env K REMOTE_ADDR ,v 127.0.0.1
+
+in env K REQUEST_METHOD ,v GET
+in env K HTTP_HOST ,v localhost:8000
+in env K PATH_INFO ,v /sdfgsdg
+in env K QUERY_STRING ,v 
+in env K SERVER_PROTOCOL ,v HTTP/1.1
+
+in env K CONTENT_LENGTH ,v 
+in env K CONTENT_TYPE ,v text/plain
+
+
+
+
+in env K HTTP_USER_AGENT ,v Mozilla/5.0 (X11; Linux x86_64; rv:79.0) Gecko/20100101 Firefox/79.0
+in env K HTTP_ACCEPT ,v text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8
+in env K HTTP_ACCEPT_LANGUAGE ,v zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2
+in env K HTTP_ACCEPT_ENCODING ,v gzip, deflate
+in env K HTTP_CONNECTION ,v keep-alive
+in env K HTTP_UPGRADE_INSECURE_REQUESTS ,v 1
+
+
+
+
+
+in env K wsgi.url_scheme ,v http
+
+in env K wsgi.input ,v <_io.BufferedReader name=6>
+in env K wsgi.errors ,v <_io.TextIOWrapper name='<stderr>' mode='w' encoding='utf-8'>
+in env K wsgi.version ,v (1, 0)
+in env K wsgi.run_once ,v False
+
+
+
+
+
+in env K wsgi.multithread ,v False
+
+in env K wsgi.multiprocess ,v False
+
+in env K wsgi.file_wrapper ,v <class 'mywsgiref.util.FileWrapper'>
