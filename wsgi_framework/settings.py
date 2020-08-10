@@ -65,7 +65,8 @@ except IOError:
 if py3k:
     import http.client as httplib
     import _thread as thread
-    from urllib.parse import urljoin, SplitResult as UrlSplitResult
+    from urllib.parse import urljoin
+    from urllib.parse import SplitResult as UrlSplitResult
     from urllib.parse import urlencode, quote as urlquote, unquote as urlunquote
     urlunquote = functools.partial(urlunquote, encoding='latin1')
     from http.cookies import SimpleCookie
@@ -87,7 +88,8 @@ if py3k:
 else: # 2.x
     import httplib
     import thread
-    from urlparse import urljoin, SplitResult as UrlSplitResult
+    from urlparse import urljoin
+    from urlparse import SplitResult as UrlSplitResult
     from urllib import urlencode, quote as urlquote, unquote as urlunquote
     from Cookie import SimpleCookie
     from itertools import imap

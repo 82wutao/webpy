@@ -8,7 +8,7 @@ from wsgi_framework import routings
 from wsgi_framework import frameworkplugins
 from wsgi_framework import http_wsgi
 from wsgi_framework import template_adapters
-
+from wsgi_framework import server_adapters
 import os
 import sys
 import time
@@ -207,7 +207,7 @@ class Bottle(object):
         """ Return a string that matches a named route """
         scriptname = http_wsgi.request.environ.get('SCRIPT_NAME', '').strip('/') + '/'
         location = self.router.build(routename, **kargs).lstrip('/')
-        return urljoin(urljoin('/', scriptname), location)
+        return settings.urljoin(settings.urljoin('/', scriptname), location)
 
     def add_route(self, route):
         ''' Add a route object, but do not change the :data:`Route.app`
@@ -249,7 +249,7 @@ class Bottle(object):
         def decorator(callback):
             # TODO: Documentation and tests
             if isinstance(callback, settings.basestring): callback = load(callback)
-            for rule in settings.makelist(path) or yieldroutes(callback):
+            for rule in settings.makelist(path) or http_wsgi.yieldroutes(callback):
                 for verb in settings.makelist(method):
                     verb = verb.upper()
                     route = routings.Route(self, rule, verb, callback, name=name,
@@ -307,7 +307,7 @@ class Bottle(object):
                 self.trigger_hook('after_request')
 
         except http_wsgi.HTTPResponse:
-            return _e()
+            return settings._e()
         except routings.RouteReset:
             route.reset()
             return self._handle(environ)
@@ -315,9 +315,9 @@ class Bottle(object):
             raise
         except Exception:
             if not self.catchall: raise
-            stacktrace = format_exc()
+            stacktrace = settings.format_exc()
             environ['wsgi.errors'].write(stacktrace)
-            return http_wsgi.HTTPError(500, "Internal Server Error", _e(), stacktrace)
+            return http_wsgi.HTTPError(500, "Internal Server Error", settings._e(), stacktrace)
 
     def _cast(self, out, peek=None):
         """ Try to convert the parameter into something WSGI compatible and set
@@ -333,10 +333,10 @@ class Bottle(object):
             return []
         # Join lists of byte or unicode strings. Mixed lists are NOT supported
         if isinstance(out, (tuple, list))\
-        and isinstance(out[0], (bytes, unicode)):
+        and isinstance(out[0], (bytes, settings.unicode)):
             out = out[0][0:0].join(out) # b'abc'[0:0] -> b''
         # Encode unicode strings
-        if isinstance(out, unicode):
+        if isinstance(out, settings.unicode):
             out = out.encode(http_wsgi.response.charset)
         # Byte Strings are just returned
         if isinstance(out, bytes):
@@ -358,7 +358,7 @@ class Bottle(object):
             if 'wsgi.file_wrapper' in http_wsgi.request.environ:
                 return http_wsgi.request.environ['wsgi.file_wrapper'](out)
             elif hasattr(out, 'close') or not hasattr(out, '__iter__'):
-                return WSGIFileWrapper(out)
+                return commons.WSGIFileWrapper(out)
 
         # Handle Iterables. We peek into them to detect their inner type.
         try:
@@ -374,21 +374,21 @@ class Bottle(object):
             raise
         except Exception:
             if not self.catchall: raise
-            first = http_wsgi.HTTPError(500, 'Unhandled exception', _e(), format_exc())
+            first = http_wsgi.HTTPError(500, 'Unhandled exception', settings._e(), settings.format_exc())
 
         # These are the inner types allowed in iterator or generator objects.
         if isinstance(first, http_wsgi.HTTPResponse):
             return self._cast(first)
         elif isinstance(first, bytes):
-            new_iter = itertools.chain([first], iout)
-        elif isinstance(first, unicode):
+            new_iter = settings.itertools.chain([first], iout)
+        elif isinstance(first, settings.unicode):
             encoder = lambda x: x.encode(http_wsgi.response.charset)
-            new_iter = imap(encoder, itertools.chain([first], iout))
+            new_iter = settings.imap(encoder, settings.itertools.chain([first], iout))
         else:
             msg = 'Unsupported response type: %s' % type(first)
             return self._cast(http_wsgi.HTTPError(500, msg))
         if hasattr(out, 'close'):
-            new_iter = _closeiter(new_iter, out.close)
+            new_iter = commons._closeiter(new_iter, out.close)
         return new_iter
 
     def wsgi(self, environ, start_response):
@@ -411,7 +411,7 @@ class Bottle(object):
             if settings.DEBUG:
                 err += '<h2>Error:</h2>\n<pre>\n%s\n</pre>\n' \
                        '<h2>Traceback:</h2>\n<pre>\n%s\n</pre>\n' \
-                       % (html_escape(repr(_e())), html_escape(format_exc()))
+                       % (html_escape(repr(settings._e())), html_escape(settings.format_exc()))
             environ['wsgi.errors'].write(err)
             headers = [('Content-Type', 'text/html; charset=UTF-8')]
             start_response('500 INTERNAL SERVER ERROR', headers, sys.exc_info())
@@ -442,7 +442,7 @@ def redirect(url, code=None):
     res = http_wsgi.response.copy(cls=http_wsgi.HTTPResponse)
     res.status = code
     res.body = ""
-    res.set_header('Location', urljoin(http_wsgi.request.url, url))
+    res.set_header('Location', settings.urljoin(http_wsgi.request.url, url))
     raise res
 
 
@@ -512,12 +512,12 @@ def static_file(filename, root, mimetype='auto', download=False, charset='UTF-8'
         headers['Date'] = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime())
         return http_wsgi.HTTPResponse(status=304, **headers)
 
-    body = '' if request.method == 'HEAD' else open(filename, 'rb')
+    body = '' if http_wsgi.request.method == 'HEAD' else open(filename, 'rb')
 
     headers["Accept-Ranges"] = "bytes"
     ranges = http_wsgi.request.environ.get('HTTP_RANGE')
     if 'HTTP_RANGE' in http_wsgi.request.environ:
-        ranges = list(parse_range_header(http_wsgi.request.environ['HTTP_RANGE'], clen))
+        ranges = list(http_wsgi.parse_range_header(http_wsgi.request.environ['HTTP_RANGE'], clen))
         if not ranges:
             return http_wsgi.HTTPError(416, "Requested Range Not Satisfiable")
         offset, end = ranges[0]
@@ -599,7 +599,7 @@ def run(app=None, server='wsgiref', host='127.0.0.1', port=8080,
                 environ = os.environ.copy()
                 environ['BOTTLE_CHILD'] = 'true'
                 environ['BOTTLE_LOCKFILE'] = lockfile
-                p = subprocess.Popen(args, env=environ)
+                p = settings.subprocess.Popen(args, env=environ)
                 while p.poll() is None: # Busy wait...
                     os.utime(lockfile, None) # I am alive!
                     time.sleep(interval)
@@ -630,14 +630,14 @@ def run(app=None, server='wsgiref', host='127.0.0.1', port=8080,
             server = load(server)
         if isinstance(server, type):
             server = server(host=host, port=port, **kargs)
-        if not isinstance(server, ServerAdapter):
+        if not isinstance(server, server_adapters.ServerAdapter):
             raise ValueError("Unknown or unsupported server: %r" % server)
 
         server.quiet = server.quiet or quiet
         if not server.quiet:
-            _stderr("Bottle v%s server starting up (using %s)...\n" % (__version__, repr(server)))
-            _stderr("Listening on http://%s:%d/\n" % (server.host, server.port))
-            _stderr("Hit Ctrl-C to quit.\n\n")
+            settings._stderr("Bottle v%s server starting up (using %s)...\n" % (settings.__version__, repr(server)))
+            settings._stderr("Listening on http://%s:%d/\n" % (server.host, server.port))
+            settings._stderr("Hit Ctrl-C to quit.\n\n")
 
         if reloader:
             lockfile = os.environ.get('BOTTLE_LOCKFILE')
@@ -661,12 +661,12 @@ def run(app=None, server='wsgiref', host='127.0.0.1', port=8080,
 
 
 
-class FileCheckerThread(threading.Thread):
+class FileCheckerThread(settings.threading.Thread):
     ''' Interrupt main-thread as soon as a changed module file is detected,
         the lockfile gets deleted or gets to old. '''
 
     def __init__(self, lockfile, interval):
-        threading.Thread.__init__(self)
+        settings.threading.Thread.__init__(self)
         self.lockfile, self.interval = lockfile, interval
         #: Is one of 'reload', 'error' or 'exit'
         self.status = None
@@ -685,11 +685,11 @@ class FileCheckerThread(threading.Thread):
             if not exists(self.lockfile)\
             or mtime(self.lockfile) < time.time() - self.interval - 5:
                 self.status = 'error'
-                thread.interrupt_main()
+                settings.thread.interrupt_main()
             for path, lmtime in list(files.items()):
                 if not exists(path) or mtime(path) > lmtime:
                     self.status = 'reload'
-                    thread.interrupt_main()
+                    settings.thread.interrupt_main()
                     break
             time.sleep(self.interval)
 
