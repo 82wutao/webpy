@@ -37,17 +37,10 @@ License: MIT (see LICENSE for details)
 
 
 
-#: A thread-safe namespace. Not used by Bottle.
-local = threading.local()
 
-# Initialize app stack (create first empty Bottle app)
-# BC: 0.6.4 and needed for run()
-app = default_app = AppStack()
-app.push()
 
-#: A virtual package that redirects import statements.
-#: Example: ``import bottle.ext.sqlite`` actually imports `bottle_sqlite`.
-ext = _ImportRedirect('bottle.ext' if __name__ == '__main__' else __name__+".ext", 'bottle_%s').module
+
+
 
 if __name__ == '__main__':
     opt, args, parser = _cmd_options, _cmd_args, _cmd_parser

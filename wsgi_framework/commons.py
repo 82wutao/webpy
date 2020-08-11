@@ -1,9 +1,15 @@
 ###############################################################################
 # Common Utilities #############################################################
 ###############################################################################
+import functools
 
+from wsgi_framework import settings
+from wsgi_framework import applications
 
-class MultiDict(DictMixin):
+import os
+import sys
+
+class MultiDict(settings.DictMixin):
     """ This dict stores multiple values per key, but behaves exactly like a
         normal dict in that it returns only the newest value for any given key.
         There are special methods available to access the full list of values.
@@ -20,7 +26,7 @@ class MultiDict(DictMixin):
     def __setitem__(self, key, value): self.append(key, value)
     def keys(self): return self.dict.keys()
 
-    if py3k:
+    if settings.py3k:
         def values(self): return (v[-1] for v in self.dict.values())
         def items(self): return ((k, v[-1]) for k, v in self.dict.items())
         def allitems(self):
@@ -91,7 +97,7 @@ class FormsDict(MultiDict):
     recode_unicode = True
 
     def _fix(self, s, encoding=None):
-        if isinstance(s, unicode) and self.recode_unicode: # Python 3 WSGI
+        if isinstance(s, settings.unicode) and self.recode_unicode: # Python 3 WSGI
             return s.encode('latin1').decode(encoding or self.input_encoding)
         elif isinstance(s, bytes): # Python 2 WSGI
             return s.decode(encoding or self.input_encoding)
@@ -116,82 +122,11 @@ class FormsDict(MultiDict):
         except (UnicodeError, KeyError):
             return default
 
-    def __getattr__(self, name, default=unicode()):
+    def __getattr__(self, name, default=settings.unicode()):
         # Without this guard, pickle generates a cryptic TypeError:
         if name.startswith('__') and name.endswith('__'):
             return super(FormsDict, self).__getattr__(name)
         return self.getunicode(name, default=default)
-
-class HeaderDict(MultiDict):
-    """ A case-insensitive version of :class:`MultiDict` that defaults to
-        replace the old value instead of appending it. """
-
-    def __init__(self, *a, **ka):
-        self.dict = {}
-        if a or ka: self.update(*a, **ka)
-
-    def __contains__(self, key): return _hkey(key) in self.dict
-    def __delitem__(self, key): del self.dict[_hkey(key)]
-    def __getitem__(self, key): return self.dict[_hkey(key)][-1]
-    def __setitem__(self, key, value): self.dict[_hkey(key)] = [_hval(value)]
-    def append(self, key, value): self.dict.setdefault(_hkey(key), []).append(_hval(value))
-    def replace(self, key, value): self.dict[_hkey(key)] = [_hval(value)]
-    def getall(self, key): return self.dict.get(_hkey(key)) or []
-    def get(self, key, default=None, index=-1):
-        return MultiDict.get(self, _hkey(key), default, index)
-    def filter(self, names):
-        for name in (_hkey(n) for n in names):
-            if name in self.dict:
-                del self.dict[name]
-
-
-class WSGIHeaderDict(DictMixin):
-    ''' This dict-like class wraps a WSGI environ dict and provides convenient
-        access to HTTP_* fields. Keys and values are native strings
-        (2.x bytes or 3.x unicode) and keys are case-insensitive. If the WSGI
-        environment contains non-native string values, these are de- or encoded
-        using a lossless 'latin1' character set.
-
-        The API will remain stable even on changes to the relevant PEPs.
-        Currently PEP 333, 444 and 3333 are supported. (PEP 444 is the only one
-        that uses non-native strings.)
-    '''
-    #: List of keys that do not have a ``HTTP_`` prefix.
-    cgikeys = ('CONTENT_TYPE', 'CONTENT_LENGTH')
-
-    def __init__(self, environ):
-        self.environ = environ
-
-    def _ekey(self, key):
-        ''' Translate header field name to CGI/WSGI environ key. '''
-        key = key.replace('-','_').upper()
-        if key in self.cgikeys:
-            return key
-        return 'HTTP_' + key
-
-    def raw(self, key, default=None):
-        ''' Return the header value as is (may be bytes or unicode). '''
-        return self.environ.get(self._ekey(key), default)
-
-    def __getitem__(self, key):
-        return tonat(self.environ[self._ekey(key)], 'latin1')
-
-    def __setitem__(self, key, value):
-        raise TypeError("%s is read-only." % self.__class__)
-
-    def __delitem__(self, key):
-        raise TypeError("%s is read-only." % self.__class__)
-
-    def __iter__(self):
-        for key in self.environ:
-            if key[:5] == 'HTTP_':
-                yield key[5:].replace('_', '-').title()
-            elif key in self.cgikeys:
-                yield key.replace('_', '-').title()
-
-    def keys(self): return [x for x in self]
-    def __len__(self): return len(self.keys())
-    def __contains__(self, key): return self._ekey(key) in self.environ
 
 
 
@@ -205,14 +140,14 @@ class ConfigDict(dict):
     '''
     __slots__ = ('_meta', '_on_change')
 
-    class Namespace(DictMixin):
+    class Namespace(settings.DictMixin):
 
         def __init__(self, config, namespace):
             self._config = config
             self._prefix = namespace
 
         def __getitem__(self, key):
-            depr('Accessing namespaces as dicts is discouraged. '
+            settings.depr('Accessing namespaces as dicts is discouraged. '
                  'Only use flat item access: '
                  'cfg["names"]["pace"]["key"] -> cfg["name.space.key"]') #0.12
             return self._config[self._prefix + '.' + key]
@@ -238,7 +173,7 @@ class ConfigDict(dict):
 
         # Deprecated ConfigDict features
         def __getattr__(self, key):
-            depr('Attribute access is deprecated.') #0.12
+            settings.depr('Attribute access is deprecated.') #0.12
             if key not in self and key[0].isupper():
                 self[key] = ConfigDict.Namespace(self._config, self._prefix + '.' + key)
             if key not in self and key.startswith('__'):
@@ -249,8 +184,8 @@ class ConfigDict(dict):
             if key in ('_config', '_prefix'):
                 self.__dict__[key] = value
                 return
-            depr('Attribute assignment is deprecated.') #0.12
-            if hasattr(DictMixin, key):
+            settings.depr('Attribute assignment is deprecated.') #0.12
+            if hasattr(settings.DictMixin, key):
                 raise AttributeError('Read-only attribute.')
             if key in self and self[key] and isinstance(self[key], self.__class__):
                 raise AttributeError('Non-empty namespace attribute.')
@@ -266,7 +201,7 @@ class ConfigDict(dict):
                             del self[prefix+key]
 
         def __call__(self, *a, **ka):
-            depr('Calling ConfDict is deprecated. Use the update() method.') #0.12
+            settings.depr('Calling ConfDict is deprecated. Use the update() method.') #0.12
             self.update(*a, **ka)
             return self
 
@@ -274,7 +209,7 @@ class ConfigDict(dict):
         self._meta = {}
         self._on_change = lambda name, value: None
         if a or ka:
-            depr('Constructor does no longer accept parameters.') #0.12
+            settings.depr('Constructor does no longer accept parameters.') #0.12
             self.update(*a, **ka)
 
     def load_config(self, filename):
@@ -284,7 +219,7 @@ class ConfigDict(dict):
             namespaces for the values within. The two special sections
             ``DEFAULT`` and ``bottle`` refer to the root namespace (no prefix).
         '''
-        conf = ConfigParser()
+        conf = settings.ConfigParser()
         conf.read(filename)
         for section in conf.sections():
             for key, value in conf.items(section):
@@ -306,7 +241,7 @@ class ConfigDict(dict):
             if not isinstance(source, dict):
                 raise TypeError('Source is not a dict (r)' % type(key))
             for key, value in source.items():
-                if not isinstance(key, basestring):
+                if not isinstance(key, settings.basestring):
                     raise TypeError('Key is not a string (%r)' % type(key))
                 full_key = prefix + '.' + key if prefix else key
                 if isinstance(value, dict):
@@ -322,7 +257,7 @@ class ConfigDict(dict):
             namespace. Apart from that it works just as the usual dict.update().
             Example: ``update('some.namespace', key='value')`` '''
         prefix = ''
-        if a and isinstance(a[0], basestring):
+        if a and isinstance(a[0], settings.basestring):
             prefix = a[0].strip('.') + '.'
             a = a[1:]
         for key, value in dict(*a, **ka).items():
@@ -334,7 +269,7 @@ class ConfigDict(dict):
         return self[key]
 
     def __setitem__(self, key, value):
-        if not isinstance(key, basestring):
+        if not isinstance(key, settings.basestring):
             raise TypeError('Key has type %r (not a string)' % type(key))
 
         value = self.meta_get(key, 'filter', lambda x: x)(value)
@@ -367,7 +302,7 @@ class ConfigDict(dict):
 
     # Deprecated ConfigDict features
     def __getattr__(self, key):
-        depr('Attribute access is deprecated.') #0.12
+        settings.depr('Attribute access is deprecated.') #0.12
         if key not in self and key[0].isupper():
             self[key] = self.Namespace(self, key)
         if key not in self and key.startswith('__'):
@@ -377,7 +312,7 @@ class ConfigDict(dict):
     def __setattr__(self, key, value):
         if key in self.__slots__:
             return dict.__setattr__(self, key, value)
-        depr('Attribute assignment is deprecated.') #0.12
+        settings.depr('Attribute assignment is deprecated.') #0.12
         if hasattr(dict, key):
             raise AttributeError('Read-only attribute.')
         if key in self and self[key] and isinstance(self[key], self.Namespace):
@@ -394,7 +329,7 @@ class ConfigDict(dict):
                         del self[prefix+key]
 
     def __call__(self, *a, **ka):
-        depr('Calling ConfDict is deprecated. Use the update() method.') #0.12
+        settings.depr('Calling ConfDict is deprecated. Use the update() method.') #0.12
         self.update(*a, **ka)
         return self
 
@@ -409,8 +344,8 @@ class AppStack(list):
 
     def push(self, value=None):
         """ Add a new :class:`Bottle` instance to the stack """
-        if not isinstance(value, Bottle):
-            value = Bottle()
+        if not isinstance(value, applications.Bottle):
+            value = applications.Bottle()
         self.append(value)
         return value
 
@@ -436,7 +371,7 @@ class _closeiter(object):
 
     def __init__(self, iterator, close=None):
         self.iterator = iterator
-        self.close_callbacks = makelist(close)
+        self.close_callbacks = settings.makelist(close)
 
     def __iter__(self):
         return iter(self.iterator)
@@ -514,7 +449,7 @@ class ResourceManager(object):
             The :attr:`path` list is searched in order. The first match is
             returend. Symlinks are followed. The result is cached to speed up
             future lookups. '''
-        if name not in self.cache or DEBUG:
+        if name not in self.cache or settings.DEBUG:
             for path in self.path:
                 fpath = os.path.join(path, name)
                 if os.path.isfile(fpath):
@@ -532,73 +467,57 @@ class ResourceManager(object):
         return self.opener(fname, mode=mode, *args, **kwargs)
 
 
-class FileUpload(object):
-
-    def __init__(self, fileobj, name, filename, headers=None):
-        ''' Wrapper for file uploads. '''
-        #: Open file(-like) object (BytesIO buffer or temporary file)
-        self.file = fileobj
-        #: Name of the upload form field
-        self.name = name
-        #: Raw filename as sent by the client (may contain unsafe characters)
-        self.raw_filename = filename
-        #: A :class:`HeaderDict` with additional headers (e.g. content-type)
-        self.headers = HeaderDict(headers) if headers else HeaderDict()
-
-    content_type = HeaderProperty('Content-Type')
-    content_length = HeaderProperty('Content-Length', reader=int, default=-1)
-
-    def get_header(self, name, default=None):
-        """ Return the value of a header within the mulripart part. """
-        return self.headers.get(name, default)
-
-    @cached_property
-    def filename(self):
-        ''' Name of the file on the client file system, but normalized to ensure
-            file system compatibility. An empty filename is returned as 'empty'.
-
-            Only ASCII letters, digits, dashes, underscores and dots are
-            allowed in the final filename. Accents are removed, if possible.
-            Whitespace is replaced by a single dash. Leading or tailing dots
-            or dashes are removed. The filename is limited to 255 characters.
-        '''
-        fname = self.raw_filename
-        if not isinstance(fname, unicode):
-            fname = fname.decode('utf8', 'ignore')
-        fname = normalize('NFKD', fname).encode('ASCII', 'ignore').decode('ASCII')
-        fname = os.path.basename(fname.replace('\\', os.path.sep))
-        fname = re.sub(r'[^a-zA-Z0-9-_.\s]', '', fname).strip()
-        fname = re.sub(r'[-\s]+', '-', fname).strip('.-')
-        return fname[:255] or 'empty'
-
-    def _copy_file(self, fp, chunk_size=2**16):
-        read, write, offset = self.file.read, fp.write, self.file.tell()
-        while 1:
-            buf = read(chunk_size)
-            if not buf: break
-            write(buf)
-        self.file.seek(offset)
-
-    def save(self, destination, overwrite=False, chunk_size=2**16):
-        ''' Save file to disk or copy its content to an open file(-like) object.
-            If *destination* is a directory, :attr:`filename` is added to the
-            path. Existing files are not overwritten by default (IOError).
-
-            :param destination: File path, directory or file(-like) object.
-            :param overwrite: If True, replace existing files. (default: False)
-            :param chunk_size: Bytes to read at a time. (default: 64kb)
-        '''
-        if isinstance(destination, basestring): # Except file-likes here
-            if os.path.isdir(destination):
-                destination = os.path.join(destination, self.filename)
-            if not overwrite and os.path.exists(destination):
-                raise IOError('File exists.')
-            with open(destination, 'wb') as fp:
-                self._copy_file(fp, chunk_size)
-        else:
-            self._copy_file(destination, chunk_size)
 
 
 
 
+class DictProperty(object):
+    ''' Property that maps to a key in a local dict-like attribute. '''
+    def __init__(self, attr, key=None, read_only=False):
+        self.attr, self.key, self.read_only = attr, key, read_only
 
+    def __call__(self, func):
+        functools.update_wrapper(self, func, updated=[])
+        self.getter, self.key = func, self.key or func.__name__
+        return self
+
+    def __get__(self, obj, cls):
+        if obj is None: return self
+        key, storage = self.key, getattr(obj, self.attr)
+        if key not in storage: storage[key] = self.getter(obj)
+        return storage[key]
+
+    def __set__(self, obj, value):
+        if self.read_only: raise AttributeError("Read-Only property.")
+        getattr(obj, self.attr)[self.key] = value
+
+    def __delete__(self, obj):
+        if self.read_only: raise AttributeError("Read-Only property.")
+        del getattr(obj, self.attr)[self.key]
+
+
+class cached_property(object):
+    ''' A property that is only computed once per instance and then replaces
+        itself with an ordinary attribute. Deleting the attribute resets the
+        property. '''
+
+    def __init__(self, func):
+        self.__doc__ = getattr(func, '__doc__')
+        self.func = func
+
+    def __get__(self, obj, cls):
+        if obj is None: return self
+        value = obj.__dict__[self.func.__name__] = self.func(obj)
+        return value
+
+
+class lazy_attribute(object):
+    ''' A property that caches itself to the class object. '''
+    def __init__(self, func):
+        functools.update_wrapper(self, func, updated=[])
+        self.getter = func
+
+    def __get__(self, obj, cls):
+        value = self.getter(cls)
+        setattr(cls, self.__name__, value)
+        return value

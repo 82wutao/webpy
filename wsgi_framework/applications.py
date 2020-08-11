@@ -369,7 +369,7 @@ class Bottle(object):
         except StopIteration:
             return self._cast('')
         except http_wsgi.HTTPResponse:
-            first = _e()
+            first = settings._e()
         except (KeyboardInterrupt, SystemExit, MemoryError):
             raise
         except Exception:
@@ -407,11 +407,11 @@ class Bottle(object):
         except Exception:
             if not self.catchall: raise
             err = '<h1>Critical error while processing request: %s</h1>' \
-                  % html_escape(environ.get('PATH_INFO', '/'))
+                  % http_wsgi.html_escape(environ.get('PATH_INFO', '/'))
             if settings.DEBUG:
                 err += '<h2>Error:</h2>\n<pre>\n%s\n</pre>\n' \
                        '<h2>Traceback:</h2>\n<pre>\n%s\n</pre>\n' \
-                       % (html_escape(repr(settings._e())), html_escape(settings.format_exc()))
+                       % (http_wsgi.html_escape(repr(settings._e())), http_wsgi.html_escape(settings.format_exc()))
             environ['wsgi.errors'].write(err)
             headers = [('Content-Type', 'text/html; charset=UTF-8')]
             start_response('500 INTERNAL SERVER ERROR', headers, sys.exc_info())
@@ -488,7 +488,7 @@ def static_file(filename, root, mimetype='auto', download=False, charset='UTF-8'
         return http_wsgi.HTTPError(403, "You do not have permission to access this file.")
 
     if mimetype == 'auto':
-        mimetype, encoding = mimetypes.guess_type(filename)
+        mimetype, encoding = settings.mimetypes.guess_type(filename)
         if encoding: headers['Content-Encoding'] = encoding
 
     if mimetype:
@@ -507,7 +507,7 @@ def static_file(filename, root, mimetype='auto', download=False, charset='UTF-8'
 
     ims = http_wsgi.request.environ.get('HTTP_IF_MODIFIED_SINCE')
     if ims:
-        ims = parse_date(ims.split(";")[0].strip())
+        ims = http_wsgi.parse_date(ims.split(";")[0].strip())
     if ims is not None and ims >= int(stats.st_mtime):
         headers['Date'] = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime())
         return http_wsgi.HTTPResponse(status=304, **headers)
@@ -592,7 +592,7 @@ def run(app=None, server='wsgiref', host='127.0.0.1', port=8080,
     if reloader and not os.environ.get('BOTTLE_CHILD'):
         try:
             lockfile = None
-            fd, lockfile = tempfile.mkstemp(prefix='bottle.', suffix='.lock')
+            fd, lockfile = settings.tempfile.mkstemp(prefix='bottle.', suffix='.lock')
             os.close(fd) # We only need this file to exist. We never write to it
             while os.path.exists(lockfile):
                 args = [sys.executable] + sys.argv
@@ -624,8 +624,8 @@ def run(app=None, server='wsgiref', host='127.0.0.1', port=8080,
         for plugin in plugins or []:
             app.install(plugin)
 
-        if server in server_names:
-            server = server_names.get(server)
+        if server in server_adapters.server_names:
+            server = server_adapters.server_names.get(server)
         if isinstance(server, settings.basestring):
             server = load(server)
         if isinstance(server, type):
@@ -655,7 +655,7 @@ def run(app=None, server='wsgiref', host='127.0.0.1', port=8080,
     except:
         if not reloader: raise
         if not getattr(server, 'quiet', quiet):
-            print_exc()
+            settings.print_exc()
         time.sleep(interval)
         sys.exit(3)
 
@@ -701,3 +701,7 @@ class FileCheckerThread(settings.threading.Thread):
         self.join()
         return exc_type is not None and issubclass(exc_type, KeyboardInterrupt)
 
+# Initialize app stack (create first empty Bottle app)
+# BC: 0.6.4 and needed for run()
+app = default_app = commons.AppStack()
+app.push()

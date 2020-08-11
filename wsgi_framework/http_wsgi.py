@@ -3,6 +3,8 @@
 ###############################################################################
 
 from wsgi_framework import exceptions
+from wsgi_framework import commons
+from wsgi_framework import settings
 
 class BaseRequest(object):
     """ A wrapper for WSGI environment dictionaries that adds a lot of
@@ -25,17 +27,17 @@ class BaseRequest(object):
         self.environ = {} if environ is None else environ
         self.environ['bottle.request'] = self
 
-    @DictProperty('environ', 'bottle.app', read_only=True)
+    @commons.DictProperty('environ', 'bottle.app', read_only=True)
     def app(self):
         ''' Bottle application handling this request. '''
         raise RuntimeError('This request is not connected to an application.')
 
-    @DictProperty('environ', 'bottle.route', read_only=True)
+    @commons.DictProperty('environ', 'bottle.route', read_only=True)
     def route(self):
         """ The bottle :class:`Route` object that matches this request. """
         raise RuntimeError('This request is not connected to a route.')
 
-    @DictProperty('environ', 'route.url_args', read_only=True)
+    @commons.DictProperty('environ', 'route.url_args', read_only=True)
     def url_args(self):
         """ The arguments extracted from the URL. """
         raise RuntimeError('This request is not connected to a route.')
@@ -51,7 +53,7 @@ class BaseRequest(object):
         ''' The ``REQUEST_METHOD`` value as an uppercase string. '''
         return self.environ.get('REQUEST_METHOD', 'GET').upper()
 
-    @DictProperty('environ', 'bottle.request.headers', read_only=True)
+    @commons.DictProperty('environ', 'bottle.request.headers', read_only=True)
     def headers(self):
         ''' A :class:`WSGIHeaderDict` that provides case-insensitive access to
             HTTP request headers. '''
@@ -61,12 +63,12 @@ class BaseRequest(object):
         ''' Return the value of a request header, or a given default value. '''
         return self.headers.get(name, default)
 
-    @DictProperty('environ', 'bottle.request.cookies', read_only=True)
+    @commons.DictProperty('environ', 'bottle.request.cookies', read_only=True)
     def cookies(self):
         """ Cookies parsed into a :class:`FormsDict`. Signed cookies are NOT
             decoded. Use :meth:`get_cookie` if you expect signed cookies. """
-        cookies = SimpleCookie(self.environ.get('HTTP_COOKIE','')).values()
-        return FormsDict((c.key, c.value) for c in cookies)
+        cookies = settings.SimpleCookie(self.environ.get('HTTP_COOKIE','')).values()
+        return commons.FormsDict((c.key, c.value) for c in cookies)
 
     def get_cookie(self, key, default=None, secret=None):
         """ Return the content of a cookie. To read a `Signed Cookie`, the
@@ -79,54 +81,54 @@ class BaseRequest(object):
             return dec[1] if dec and dec[0] == key else default
         return value or default
 
-    @DictProperty('environ', 'bottle.request.query', read_only=True)
+    @commons.DictProperty('environ', 'bottle.request.query', read_only=True)
     def query(self):
         ''' The :attr:`query_string` parsed into a :class:`FormsDict`. These
             values are sometimes called "URL arguments" or "GET parameters", but
             not to be confused with "URL wildcards" as they are provided by the
             :class:`Router`. '''
-        get = self.environ['bottle.get'] = FormsDict()
+        get = self.environ['bottle.get'] = commons.FormsDict()
         pairs = _parse_qsl(self.environ.get('QUERY_STRING', ''))
         for key, value in pairs:
             get[key] = value
         return get
 
-    @DictProperty('environ', 'bottle.request.forms', read_only=True)
+    @commons.DictProperty('environ', 'bottle.request.forms', read_only=True)
     def forms(self):
         """ Form values parsed from an `url-encoded` or `multipart/form-data`
             encoded POST or PUT request body. The result is returned as a
             :class:`FormsDict`. All keys and values are strings. File uploads
             are stored separately in :attr:`files`. """
-        forms = FormsDict()
+        forms = commons.FormsDict()
         for name, item in self.POST.allitems():
             if not isinstance(item, FileUpload):
                 forms[name] = item
         return forms
 
-    @DictProperty('environ', 'bottle.request.params', read_only=True)
+    @commons.DictProperty('environ', 'bottle.request.params', read_only=True)
     def params(self):
         """ A :class:`FormsDict` with the combined values of :attr:`query` and
             :attr:`forms`. File uploads are stored in :attr:`files`. """
-        params = FormsDict()
+        params = commons.FormsDict()
         for key, value in self.query.allitems():
             params[key] = value
         for key, value in self.forms.allitems():
             params[key] = value
         return params
 
-    @DictProperty('environ', 'bottle.request.files', read_only=True)
+    @commons.DictProperty('environ', 'bottle.request.files', read_only=True)
     def files(self):
         """ File uploads parsed from `multipart/form-data` encoded POST or PUT
             request body. The values are instances of :class:`FileUpload`.
 
         """
-        files = FormsDict()
+        files = commons.FormsDict()
         for name, item in self.POST.allitems():
             if isinstance(item, FileUpload):
                 files[name] = item
         return files
 
-    @DictProperty('environ', 'bottle.request.json', read_only=True)
+    @commons.DictProperty('environ', 'bottle.request.json', read_only=True)
     def json(self):
         ''' If the ``Content-Type`` header is ``application/json``, this
             property holds the parsed content of the request body. Only requests
@@ -175,7 +177,7 @@ class BaseRequest(object):
             if read(2) != rn:
                 raise err
 
-    @DictProperty('environ', 'bottle.request.body', read_only=True)
+    @commons.DictProperty('environ', 'bottle.request.body', read_only=True)
     def _body(self):
         body_iter = self._iter_chunked if self.chunked else self._iter_body
         read_func = self.environ['wsgi.input'].read
@@ -222,13 +224,13 @@ class BaseRequest(object):
     #: An alias for :attr:`query`.
     GET = query
 
-    @DictProperty('environ', 'bottle.request.post', read_only=True)
+    @commons.DictProperty('environ', 'bottle.request.post', read_only=True)
     def POST(self):
         """ The values of :attr:`forms` and :attr:`files` combined into a single
             :class:`FormsDict`. Values are either strings (form values) or
             instances of :class:`cgi.FieldStorage` (file uploads).
         """
-        post = FormsDict()
+        post = commons.FormsDict()
         # We default to application/x-www-form-urlencoded for everything that
         # is not multipart and take the fast path (also: 3.1 workaround)
         if not self.content_type.startswith('multipart/'):
@@ -265,7 +267,7 @@ class BaseRequest(object):
             correctly. """
         return self.urlparts.geturl()
 
-    @DictProperty('environ', 'bottle.request.urlparts', read_only=True)
+    @commons.DictProperty('environ', 'bottle.request.urlparts', read_only=True)
     def urlparts(self):
         ''' The :attr:`url` string as an :class:`urlparse.SplitResult` tuple.
             The tuple contains (scheme, host, path, query_string and fragment),
@@ -427,6 +429,77 @@ def _hval(value):
         raise ValueError("Header value must not contain control characters: %r" % value)
     return value
 
+
+class HeaderDict(commons.MultiDict):
+    """ A case-insensitive version of :class:`MultiDict` that defaults to
+        replace the old value instead of appending it. """
+
+    def __init__(self, *a, **ka):
+        self.dict = {}
+        if a or ka: self.update(*a, **ka)
+
+    def __contains__(self, key): return _hkey(key) in self.dict
+    def __delitem__(self, key): del self.dict[_hkey(key)]
+    def __getitem__(self, key): return self.dict[_hkey(key)][-1]
+    def __setitem__(self, key, value): self.dict[_hkey(key)] = [_hval(value)]
+    def append(self, key, value): self.dict.setdefault(_hkey(key), []).append(_hval(value))
+    def replace(self, key, value): self.dict[_hkey(key)] = [_hval(value)]
+    def getall(self, key): return self.dict.get(_hkey(key)) or []
+    def get(self, key, default=None, index=-1):
+        return MultiDict.get(self, _hkey(key), default, index)
+    def filter(self, names):
+        for name in (_hkey(n) for n in names):
+            if name in self.dict:
+                del self.dict[name]
+
+
+class WSGIHeaderDict(settings.DictMixin):
+    ''' This dict-like class wraps a WSGI environ dict and provides convenient
+        access to HTTP_* fields. Keys and values are native strings
+        (2.x bytes or 3.x unicode) and keys are case-insensitive. If the WSGI
+        environment contains non-native string values, these are de- or encoded
+        using a lossless 'latin1' character set.
+
+        The API will remain stable even on changes to the relevant PEPs.
+        Currently PEP 333, 444 and 3333 are supported. (PEP 444 is the only one
+        that uses non-native strings.)
+    '''
+    #: List of keys that do not have a ``HTTP_`` prefix.
+    cgikeys = ('CONTENT_TYPE', 'CONTENT_LENGTH')
+
+    def __init__(self, environ):
+        self.environ = environ
+
+    def _ekey(self, key):
+        ''' Translate header field name to CGI/WSGI environ key. '''
+        key = key.replace('-','_').upper()
+        if key in self.cgikeys:
+            return key
+        return 'HTTP_' + key
+
+    def raw(self, key, default=None):
+        ''' Return the header value as is (may be bytes or unicode). '''
+        return self.environ.get(self._ekey(key), default)
+
+    def __getitem__(self, key):
+        return tonat(self.environ[self._ekey(key)], 'latin1')
+
+    def __setitem__(self, key, value):
+        raise TypeError("%s is read-only." % self.__class__)
+
+    def __delitem__(self, key):
+        raise TypeError("%s is read-only." % self.__class__)
+
+    def __iter__(self):
+        for key in self.environ:
+            if key[:5] == 'HTTP_':
+                yield key[5:].replace('_', '-').title()
+            elif key in self.cgikeys:
+                yield key.replace('_', '-').title()
+
+    def keys(self): return [x for x in self]
+    def __len__(self): return len(self.keys())
+    def __contains__(self, key): return self._ekey(key) in self.environ
 
 
 class HeaderProperty(object):
@@ -935,3 +1008,72 @@ request = LocalRequest()
 #: A thread-safe instance of :class:`LocalResponse`. It is used to change the
 #: HTTP response for the *current* request.
 response = LocalResponse()
+
+
+
+class FileUpload(object):
+
+    def __init__(self, fileobj, name, filename, headers=None):
+        ''' Wrapper for file uploads. '''
+        #: Open file(-like) object (BytesIO buffer or temporary file)
+        self.file = fileobj
+        #: Name of the upload form field
+        self.name = name
+        #: Raw filename as sent by the client (may contain unsafe characters)
+        self.raw_filename = filename
+        #: A :class:`HeaderDict` with additional headers (e.g. content-type)
+        self.headers = HeaderDict(headers) if headers else HeaderDict()
+
+    content_type = HeaderProperty('Content-Type')
+    content_length = HeaderProperty('Content-Length', reader=int, default=-1)
+
+    def get_header(self, name, default=None):
+        """ Return the value of a header within the mulripart part. """
+        return self.headers.get(name, default)
+
+    @commons.cached_property
+    def filename(self):
+        ''' Name of the file on the client file system, but normalized to ensure
+            file system compatibility. An empty filename is returned as 'empty'.
+
+            Only ASCII letters, digits, dashes, underscores and dots are
+            allowed in the final filename. Accents are removed, if possible.
+            Whitespace is replaced by a single dash. Leading or tailing dots
+            or dashes are removed. The filename is limited to 255 characters.
+        '''
+        fname = self.raw_filename
+        if not isinstance(fname, settings.unicode):
+            fname = fname.decode('utf8', 'ignore')
+        fname = normalize('NFKD', fname).encode('ASCII', 'ignore').decode('ASCII')
+        fname = os.path.basename(fname.replace('\\', os.path.sep))
+        fname = settings.re.sub(r'[^a-zA-Z0-9-_.\s]', '', fname).strip()
+        fname = settings.re.sub(r'[-\s]+', '-', fname).strip('.-')
+        return fname[:255] or 'empty'
+
+    def _copy_file(self, fp, chunk_size=2**16):
+        read, write, offset = self.file.read, fp.write, self.file.tell()
+        while 1:
+            buf = read(chunk_size)
+            if not buf: break
+            write(buf)
+        self.file.seek(offset)
+
+    def save(self, destination, overwrite=False, chunk_size=2**16):
+        ''' Save file to disk or copy its content to an open file(-like) object.
+            If *destination* is a directory, :attr:`filename` is added to the
+            path. Existing files are not overwritten by default (IOError).
+
+            :param destination: File path, directory or file(-like) object.
+            :param overwrite: If True, replace existing files. (default: False)
+            :param chunk_size: Bytes to read at a time. (default: 64kb)
+        '''
+        if isinstance(destination, settings.basestring): # Except file-likes here
+            if os.path.isdir(destination):
+                destination = os.path.join(destination, self.filename)
+            if not overwrite and os.path.exists(destination):
+                raise IOError('File exists.')
+            with open(destination, 'wb') as fp:
+                self._copy_file(fp, chunk_size)
+        else:
+            self._copy_file(destination, chunk_size)
+

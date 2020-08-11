@@ -1,15 +1,21 @@
 ###############################################################################
 # Plugins ######################################################################
 ###############################################################################
+import sys
 
-class PluginError(BottleException): pass
+from wsgi_framework import exceptions
+from wsgi_framework import settings
+from wsgi_framework import http_wsgi
+from wsgi_framework import template_adapters
+
+class PluginError(exceptions.BottleException): pass
 
 
 class JSONPlugin(object):
     name = 'json'
     api  = 2
 
-    def __init__(self, json_dumps=json_dumps):
+    def __init__(self, json_dumps=settings.json_dumps):
         self.json_dumps = json_dumps
 
     def apply(self, callback, route):
@@ -18,16 +24,16 @@ class JSONPlugin(object):
         def wrapper(*a, **ka):
             try:
                 rv = callback(*a, **ka)
-            except HTTPError:
-                rv = _e()
+            except http_wsgi.HTTPError:
+                rv = settings._e()
 
             if isinstance(rv, dict):
                 #Attempt to serialize, raises exception on failure
                 json_response = dumps(rv)
                 #Set content type only if serialization succesful
-                response.content_type = 'application/json'
+                http_wsgi.response.content_type = 'application/json'
                 return json_response
-            elif isinstance(rv, HTTPResponse) and isinstance(rv.body, dict):
+            elif isinstance(rv, http_wsgi.HTTPResponse) and isinstance(rv.body, dict):
                 rv.body = dumps(rv.body)
                 rv.content_type = 'application/json'
             return rv
@@ -46,9 +52,9 @@ class TemplatePlugin(object):
     def apply(self, callback, route):
         conf = route.config.get('template')
         if isinstance(conf, (tuple, list)) and len(conf) == 2:
-            return view(conf[0], **conf[1])(callback)
+            return template_adapters.view(conf[0], **conf[1])(callback)
         elif isinstance(conf, str):
-            return view(conf)(callback)
+            return template_adapters.view(conf)(callback)
         else:
             return callback
 
@@ -59,7 +65,7 @@ class _ImportRedirect(object):
         ''' Create a virtual package that redirects imports (see PEP 302). '''
         self.name = name
         self.impmask = impmask
-        self.module = sys.modules.setdefault(name, new_module(name))
+        self.module = sys.modules.setdefault(name, settings.new_module(name))
         self.module.__dict__.update({'__file__': __file__, '__path__': [],
                                     '__all__': [], '__loader__': self})
         sys.meta_path.append(self)
@@ -82,3 +88,6 @@ class _ImportRedirect(object):
 
 
 
+#: A virtual package that redirects import statements.
+#: Example: ``import bottle.ext.sqlite`` actually imports `bottle_sqlite`.
+ext = _ImportRedirect('bottle.ext' if __name__ == '__main__' else __name__+".ext", 'bottle_%s').module
