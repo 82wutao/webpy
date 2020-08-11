@@ -2,11 +2,17 @@
 ###############################################################################
 # Template Adapters ############################################################
 ###############################################################################
+import functools
+import os
 
+from wsgi_framework import applications
+from wsgi_framework import commons
+from wsgi_framework import settings as env_settings
+from wsgi_framework import http_wsgi
 
-class TemplateError(HTTPError):
+class TemplateError(http_wsgi.HTTPError):
     def __init__(self, message):
-        HTTPError.__init__(self, 500, message)
+        http_wsgi.HTTPError.__init__(self, 500, message)
 
 
 class BaseTemplate(object):
@@ -46,11 +52,11 @@ class BaseTemplate(object):
         """ Search name in all directories specified in lookup.
         First without, then with common extensions. Return first hit. """
         if not lookup:
-            depr('The template lookup path list should not be empty.') #0.12
+            env_settings.depr('The template lookup path list should not be empty.') #0.12
             lookup = ['.']
 
         if os.path.isabs(name) and os.path.isfile(name):
-            depr('Absolute template path names are deprecated.') #0.12
+            env_settings.depr('Absolute template path names are deprecated.') #0.12
             return os.path.abspath(name)
 
         for spath in lookup:
@@ -93,7 +99,7 @@ class MakoTemplate(BaseTemplate):
         from mako.template import Template
         from mako.lookup import TemplateLookup
         options.update({'input_encoding':self.encoding})
-        options.setdefault('format_exceptions', bool(DEBUG))
+        options.setdefault('format_exceptions', bool(env_settings.DEBUG))
         lookup = TemplateLookup(directories=self.lookup, **options)
         if self.source:
             self.tpl = Template(self.source, lookup=lookup, **options)
@@ -110,7 +116,7 @@ class MakoTemplate(BaseTemplate):
 class CheetahTemplate(BaseTemplate):
     def prepare(self, **options):
         from Cheetah.Template import Template
-        self.context = threading.local()
+        self.context = env_settings.threading.local()
         self.context.vars = {}
         options['searchList'] = [self.context.vars]
         if self.source:
@@ -157,30 +163,30 @@ class Jinja2Template(BaseTemplate):
 
 class SimpleTemplate(BaseTemplate):
 
-    def prepare(self, escape_func=html_escape, noescape=False, syntax=None, **ka):
+    def prepare(self, escape_func=http_wsgi.html_escape, noescape=False, syntax=None, **ka):
         self.cache = {}
         enc = self.encoding
-        self._str = lambda x: touni(x, enc)
-        self._escape = lambda x: escape_func(touni(x, enc))
+        self._str = lambda x: env_settings.touni(x, enc)
+        self._escape = lambda x: escape_func(env_settings.touni(x, enc))
         self.syntax = syntax
         if noescape:
             self._str, self._escape = self._escape, self._str
 
-    @cached_property
+    @commons.cached_property
     def co(self):
         return compile(self.code, self.filename or '<string>', 'exec')
 
-    @cached_property
+    @commons.cached_property
     def code(self):
         source = self.source
         if not source:
             with open(self.filename, 'rb') as f:
                 source = f.read()
         try:
-            source, encoding = touni(source), 'utf8'
+            source, encoding = env_settings.touni(source), 'utf8'
         except UnicodeError:
-            depr('Template encodings other than utf8 are no longer supported.') #0.11
-            source, encoding = touni(source, 'latin1'), 'latin1'
+            env_settings.depr('Template encodings other than utf8 are no longer supported.') #0.11
+            source, encoding = env_settings.touni(source, 'latin1'), 'latin1'
         parser = StplParser(source, encoding=encoding, syntax=self.syntax)
         code = parser.translate()
         self.encoding = parser.encoding
@@ -188,13 +194,13 @@ class SimpleTemplate(BaseTemplate):
 
     def _rebase(self, _env, _name=None, **kwargs):
         if _name is None:
-            depr('Rebase function called without arguments.'
+            env_settings.depr('Rebase function called without arguments.'
                  ' You were probably looking for {{base}}?', True) #0.12
         _env['_rebase'] = (_name, kwargs)
 
     def _include(self, _env, _name=None, **kwargs):
         if _name is None:
-            depr('Rebase function called without arguments.'
+            env_settings.depr('Rebase function called without arguments.'
                  ' You were probably looking for {{base}}?', True) #0.12
         env = _env.copy()
         env.update(kwargs)
@@ -264,7 +270,7 @@ class StplParser(object):
     default_syntax = '<% %> % {{ }}'
 
     def __init__(self, source, syntax=None, encoding='utf8'):
-        self.source, self.encoding = touni(source, encoding), encoding
+        self.source, self.encoding = env_settings.touni(source, encoding), encoding
         self.set_syntax(syntax or self.default_syntax)
         self.code_buffer, self.text_buffer = [], []
         self.lineno, self.offset = 1, 0
@@ -280,10 +286,10 @@ class StplParser(object):
         self._tokens = syntax.split()
         if not syntax in self._re_cache:
             names = 'block_start block_close line_start inline_start inline_end'
-            etokens = map(re.escape, self._tokens)
+            etokens = map(env_settings.re.escape, self._tokens)
             pattern_vars = dict(zip(names.split(), etokens))
             patterns = (self._re_split, self._re_tok, self._re_inl)
-            patterns = [re.compile(p%pattern_vars) for p in patterns]
+            patterns = [env_settings.re.compile(p%pattern_vars) for p in patterns]
             self._re_cache[syntax] = patterns
         self.re_split, self.re_tok, self.re_inl = self._re_cache[syntax]
 
@@ -303,7 +309,7 @@ class StplParser(object):
                     self.offset += len(line+sep)+1
                     continue
                 elif m.group(5): # Old escape syntax
-                    depr('Escape code lines with a backslash.') #0.12
+                    env_settings.depr('Escape code lines with a backslash.') #0.12
                     line, sep, _ = self.source[self.offset:].partition('\n')
                     self.text_buffer.append(m.group(2)+line+sep)
                     self.offset += len(line+sep)+1
@@ -396,14 +402,17 @@ class StplParser(object):
     def fix_backward_compatibility(self, line, comment):
         parts = line.strip().split(None, 2)
         if parts and parts[0] in ('include', 'rebase'):
-            depr('The include and rebase keywords are functions now.') #0.12
-            if len(parts) == 1:   return "_printlist([base])", comment
-            elif len(parts) == 2: return "_=%s(%r)" % tuple(parts), comment
-            else:                 return "_=%s(%r, %s)" % tuple(parts), comment
+            env_settings.depr('The include and rebase keywords are functions now.') #0.12
+            if len(parts) == 1:
+                return "_printlist([base])", comment
+            elif len(parts) == 2:
+                return "_=%s(%r)" % tuple(parts), comment
+            else:
+                return "_=%s(%r, %s)" % tuple(parts), comment
         if self.lineno <= 2 and not line.strip() and 'coding' in comment:
-            m = re.match(r"#.*coding[:=]\s*([-\w.]+)", comment)
+            m = env_settings.re.match(r"#.*coding[:=]\s*([-\w.]+)", comment)
             if m:
-                depr('PEP263 encoding strings in templates are deprecated.') #0.12
+                env_settings.depr('PEP263 encoding strings in templates are deprecated.') #0.12
                 enc = m.group(1)
                 self.source = self.source.encode(self.encoding).decode(enc)
                 self.encoding = enc
@@ -420,21 +429,21 @@ def template(*args, **kwargs):
     '''
     tpl = args[0] if args else None
     adapter = kwargs.pop('template_adapter', SimpleTemplate)
-    lookup = kwargs.pop('template_lookup', TEMPLATE_PATH)
+    lookup = kwargs.pop('template_lookup', env_settings.TEMPLATE_PATH)
     tplid = (id(lookup), tpl)
-    if tplid not in TEMPLATES or DEBUG:
+    if tplid not in env_settings.TEMPLATES or env_settings.DEBUG:
         settings = kwargs.pop('template_settings', {})
         if isinstance(tpl, adapter):
-            TEMPLATES[tplid] = tpl
-            if settings: TEMPLATES[tplid].prepare(**settings)
+            env_settings.TEMPLATES[tplid] = tpl
+            if settings: env_settings.TEMPLATES[tplid].prepare(**settings)
         elif "\n" in tpl or "{" in tpl or "%" in tpl or '$' in tpl:
-            TEMPLATES[tplid] = adapter(source=tpl, lookup=lookup, **settings)
+            env_settings.TEMPLATES[tplid] = adapter(source=tpl, lookup=lookup, **settings)
         else:
-            TEMPLATES[tplid] = adapter(name=tpl, lookup=lookup, **settings)
-    if not TEMPLATES[tplid]:
-        abort(500, 'Template (%s) not found' % tpl)
+            env_settings.TEMPLATES[tplid] = adapter(name=tpl, lookup=lookup, **settings)
+    if not env_settings.TEMPLATES[tplid]:
+        applications.abort(500, 'Template (%s) not found' % tpl)
     for dictarg in args[1:]: kwargs.update(dictarg)
-    return TEMPLATES[tplid].render(kwargs)
+    return env_settings.TEMPLATES[tplid].render(kwargs)
 
 mako_template = functools.partial(template, template_adapter=MakoTemplate)
 cheetah_template = functools.partial(template, template_adapter=CheetahTemplate)
@@ -455,7 +464,7 @@ def view(tpl_name, **defaults):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             result = func(*args, **kwargs)
-            if isinstance(result, (dict, DictMixin)):
+            if isinstance(result, (dict, env_settings.DictMixin)):
                 tplvars = defaults.copy()
                 tplvars.update(result)
                 return template(tpl_name, **tplvars)

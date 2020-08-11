@@ -1,7 +1,11 @@
 ###############################################################################
 # HTTP and WSGI Tools ##########################################################
 ###############################################################################
+import functools
+import os
+import time
 
+from wsgi_framework import applications
 from wsgi_framework import exceptions
 from wsgi_framework import commons
 from wsgi_framework import settings
@@ -139,7 +143,7 @@ class BaseRequest(object):
             b = self._get_body_string()
             if not b:
                 return None
-            return json_loads(b)
+            return settings.json_loads(b)
         return None
 
     def _iter_body(self, read, bufsize):
@@ -152,7 +156,7 @@ class BaseRequest(object):
 
     def _iter_chunked(self, read, bufsize):
         err = HTTPError(400, 'Error while parsing chunked transfer body.')
-        rn, sem, bs = tob('\r\n'), tob(';'), tob('')
+        rn, sem, bs = settings.tob('\r\n'), settings.tob(';'), settings.tob('')
         while True:
             header = read(1)
             while header[-2:] != rn:
@@ -162,7 +166,7 @@ class BaseRequest(object):
                 if len(header) > bufsize: raise err
             size, _, _ = header.partition(sem)
             try:
-                maxread = int(tonat(size.strip()), 16)
+                maxread = int(settings.tonat(size.strip()), 16)
             except ValueError:
                 raise err
             if maxread == 0: break
@@ -181,12 +185,12 @@ class BaseRequest(object):
     def _body(self):
         body_iter = self._iter_chunked if self.chunked else self._iter_body
         read_func = self.environ['wsgi.input'].read
-        body, body_size, is_temp_file = BytesIO(), 0, False
+        body, body_size, is_temp_file = settings.BytesIO(), 0, False
         for part in body_iter(read_func, self.MEMFILE_MAX):
             body.write(part)
             body_size += len(part)
             if not is_temp_file and body_size > self.MEMFILE_MAX:
-                body, tmp = TemporaryFile(mode='w+b'), body
+                body, tmp = settings.TemporaryFile(mode='w+b'), body
                 body.write(tmp.getvalue())
                 del tmp
                 is_temp_file = True
@@ -234,7 +238,7 @@ class BaseRequest(object):
         # We default to application/x-www-form-urlencoded for everything that
         # is not multipart and take the fast path (also: 3.1 workaround)
         if not self.content_type.startswith('multipart/'):
-            pairs = _parse_qsl(tonat(self._get_body_string(), 'latin1'))
+            pairs = _parse_qsl(settings.tonat(self._get_body_string(), 'latin1'))
             for key, value in pairs:
                 post[key] = value
             return post
@@ -243,12 +247,12 @@ class BaseRequest(object):
         for key in ('REQUEST_METHOD', 'CONTENT_TYPE', 'CONTENT_LENGTH'):
             if key in self.environ: safe_env[key] = self.environ[key]
         args = dict(fp=self.body, environ=safe_env, keep_blank_values=True)
-        if py31:
-            args['fp'] = NCTextIOWrapper(args['fp'], encoding='utf8',
+        if settings.py31:
+            args['fp'] = settings.NCTextIOWrapper(args['fp'], encoding='utf8',
                                          newline='\n')
-        elif py3k:
+        elif settings.py3k:
             args['encoding'] = 'utf8'
-        data = cgi.FieldStorage(**args)
+        data = settings.cgi.FieldStorage(**args)
         self['_cgi.FieldStorage'] = data #http://bugs.python.org/issue18394#msg207958
         data = data.list or []
         for item in data:
@@ -282,13 +286,13 @@ class BaseRequest(object):
             port = env.get('SERVER_PORT')
             if port and port != ('80' if http == 'http' else '443'):
                 host += ':' + port
-        path = urlquote(self.fullpath)
-        return UrlSplitResult(http, host, path, env.get('QUERY_STRING'), '')
+        path = settings.urlquote(self.fullpath)
+        return settings.UrlSplitResult(http, host, path, env.get('QUERY_STRING'), '')
 
     @property
     def fullpath(self):
         """ Request path including :attr:`script_name` (if present). """
-        return urljoin(self.script_name, self.path.lstrip('/'))
+        return settings.urljoin(self.script_name, self.path.lstrip('/'))
 
     @property
     def query_string(self):
@@ -424,7 +428,7 @@ def _hkey(key):
 
 
 def _hval(value):
-    value = tonat(value)
+    value = settings.tonat(value)
     if '\n' in value or '\r' in value or '\0' in value:
         raise ValueError("Header value must not contain control characters: %r" % value)
     return value
@@ -446,7 +450,7 @@ class HeaderDict(commons.MultiDict):
     def replace(self, key, value): self.dict[_hkey(key)] = [_hval(value)]
     def getall(self, key): return self.dict.get(_hkey(key)) or []
     def get(self, key, default=None, index=-1):
-        return MultiDict.get(self, _hkey(key), default, index)
+        return commons.MultiDict.get(self, _hkey(key), default, index)
     def filter(self, names):
         for name in (_hkey(n) for n in names):
             if name in self.dict:
@@ -482,7 +486,7 @@ class WSGIHeaderDict(settings.DictMixin):
         return self.environ.get(self._ekey(key), default)
 
     def __getitem__(self, key):
-        return tonat(self.environ[self._ekey(key)], 'latin1')
+        return settings.tonat(self.environ[self._ekey(key)], 'latin1')
 
     def __setitem__(self, key, value):
         raise TypeError("%s is read-only." % self.__class__)
@@ -569,7 +573,7 @@ class BaseResponse(object):
         copy.status = self.status
         copy._headers = dict((k, v[:]) for (k, v) in self._headers.items())
         if self._cookies:
-            copy._cookies = SimpleCookie()
+            copy._cookies = settings.SimpleCookie()
             copy._cookies.load(self._cookies.output(header=''))
         return copy
 
@@ -592,7 +596,7 @@ class BaseResponse(object):
 
     def _set_status(self, status):
         if isinstance(status, int):
-            code, status = status, _HTTP_STATUS_LINES.get(status)
+            code, status = status, settings._HTTP_STATUS_LINES.get(status)
         elif ' ' in status:
             status = status.strip()
             code   = int(status.split()[0])
@@ -659,14 +663,14 @@ class BaseResponse(object):
         if self._cookies:
             for c in self._cookies.values():
                 out.append(('Set-Cookie', _hval(c.OutputString())))
-        if py3k:
+        if settings.py3k:
             out = [(k, v.encode('utf8').decode('latin1')) for (k, v) in out]
         return out
 
     content_type = HeaderProperty('Content-Type')
     content_length = HeaderProperty('Content-Length', reader=int)
     expires = HeaderProperty('Expires',
-        reader=lambda x: datetime.utcfromtimestamp(parse_date(x)),
+        reader=lambda x: settings.datetime.utcfromtimestamp(parse_date(x)),
         writer=lambda x: http_date(x))
 
     @property
@@ -710,11 +714,11 @@ class BaseResponse(object):
             save, not to store secret information at client side.
         '''
         if not self._cookies:
-            self._cookies = SimpleCookie()
+            self._cookies = settings.SimpleCookie()
 
         if secret:
-            value = touni(cookie_encode((name, value), secret))
-        elif not isinstance(value, basestring):
+            value = settings.touni(cookie_encode((name, value), secret))
+        elif not isinstance(value, settings.basestring):
             raise TypeError('Secret key missing for non-string Cookie.')
 
         if len(value) > 4096: raise ValueError('Cookie value to long.')
@@ -722,10 +726,10 @@ class BaseResponse(object):
 
         for key, value in options.items():
             if key == 'max_age':
-                if isinstance(value, timedelta):
+                if isinstance(value, settings.timedelta):
                     value = value.seconds + value.days * 24 * 3600
             if key == 'expires':
-                if isinstance(value, (datedate, datetime)):
+                if isinstance(value, (settings.datedate, settings.datetime)):
                     value = value.timetuple()
                 elif isinstance(value, (int, float)):
                     value = time.gmtime(value)
@@ -747,8 +751,8 @@ class BaseResponse(object):
 
 
 def local_property(name=None):
-    if name: depr('local_property() is deprecated and will be removed.') #0.12
-    ls = threading.local()
+    if name: settings.depr('local_property() is deprecated and will be removed.') #0.12
+    ls = settings.threading.local()
     def fget(self):
         try: return ls.var
         except AttributeError:
@@ -817,18 +821,18 @@ class HTTPError(HTTPResponse):
 
 
 def http_date(value):
-    if isinstance(value, (datedate, datetime)):
+    if isinstance(value, (settings.datedate, settings.datetime)):
         value = value.utctimetuple()
     elif isinstance(value, (int, float)):
         value = time.gmtime(value)
-    if not isinstance(value, basestring):
+    if not isinstance(value, settings.basestring):
         value = time.strftime("%a, %d %b %Y %H:%M:%S GMT", value)
     return value
 
 def parse_date(ims):
     """ Parse rfc1123, rfc850 and asctime timestamps and return UTC epoch. """
     try:
-        ts = email.utils.parsedate_tz(ims)
+        ts = settings.email.utils.parsedate_tz(ims)
         return time.mktime(ts[:8] + (0,)) - (ts[9] or 0) - time.timezone
     except (TypeError, ValueError, IndexError, OverflowError):
         return None
@@ -838,7 +842,7 @@ def parse_auth(header):
     try:
         method, data = header.split(None, 1)
         if method.lower() == 'basic':
-            user, pwd = touni(base64.b64decode(tob(data))).split(':',1)
+            user, pwd = settings.touni(settings.base64.b64decode(settings.tob(data))).split(':',1)
             return user, pwd
     except (KeyError, ValueError):
         return None
@@ -867,8 +871,8 @@ def _parse_qsl(qs):
         if not pair: continue
         nv = pair.split('=', 1)
         if len(nv) != 2: nv.append('')
-        key = urlunquote(nv[0].replace('+', ' '))
-        value = urlunquote(nv[1].replace('+', ' '))
+        key = settings.urlunquote(nv[0].replace('+', ' '))
+        value = settings.urlunquote(nv[1].replace('+', ' '))
         r.append((key, value))
     return r
 
@@ -880,24 +884,24 @@ def _lscmp(a, b):
 
 def cookie_encode(data, key):
     ''' Encode and sign a pickle-able object. Return a (byte) string '''
-    msg = base64.b64encode(pickle.dumps(data, -1))
-    sig = base64.b64encode(hmac.new(tob(key), msg, digestmod=hashlib.md5).digest())
-    return tob('!') + sig + tob('?') + msg
+    msg = settings.base64.b64encode(settings.pickle.dumps(data, -1))
+    sig = settings.base64.b64encode(settings.hmac.new(settings.tob(key), msg, digestmod=settings.hashlib.md5).digest())
+    return settings.tob('!') + sig + settings.tob('?') + msg
 
 
 def cookie_decode(data, key):
     ''' Verify and decode an encoded string. Return an object or None.'''
-    data = tob(data)
+    data = settings.tob(data)
     if cookie_is_encoded(data):
-        sig, msg = data.split(tob('?'), 1)
-        if _lscmp(sig[1:], base64.b64encode(hmac.new(tob(key), msg, digestmod=hashlib.md5).digest())):
-            return pickle.loads(base64.b64decode(msg))
+        sig, msg = data.split(settings.tob('?'), 1)
+        if _lscmp(sig[1:], settings.base64.b64encode(settings.hmac.new(settings.tob(key), msg, digestmod=settings.hashlib.md5).digest())):
+            return settings.pickle.loads(settings.base64.b64decode(msg))
     return None
 
 
 def cookie_is_encoded(data):
     ''' Return True if the argument looks like a encoded cookie.'''
-    return bool(data.startswith(tob('!')) and tob('?') in data)
+    return bool(data.startswith(settings.tob('!')) and settings.tob('?') in data)
 
 
 def html_escape(string):
@@ -923,7 +927,7 @@ def yieldroutes(func):
         d(x=5, y=6) -> '/d' and '/d/<x>' and '/d/<x>/<y>'
     """
     path = '/' + func.__name__.replace('__','/').lstrip('/')
-    spec = getargspec(func)
+    spec = settings.getargspec(func)
     argc = len(spec[0]) - len(spec[3] or [])
     path += ('/<%s>' * argc) % tuple(spec[0][:argc])
     yield path
@@ -983,9 +987,9 @@ def auth_basic(check, realm="private", text="Access denied"):
 
 def make_default_app_wrapper(name):
     ''' Return a callable that relays calls to the current default app. '''
-    @functools.wraps(getattr(Bottle, name))
+    @functools.wraps(getattr(applications.Bottle, name))
     def wrapper(*a, **ka):
-        return getattr(app(), name)(*a, **ka)
+        return getattr(applications.app(), name)(*a, **ka)
     return wrapper
 
 route     = make_default_app_wrapper('route')
@@ -1044,7 +1048,7 @@ class FileUpload(object):
         fname = self.raw_filename
         if not isinstance(fname, settings.unicode):
             fname = fname.decode('utf8', 'ignore')
-        fname = normalize('NFKD', fname).encode('ASCII', 'ignore').decode('ASCII')
+        fname = settings.normalize('NFKD', fname).encode('ASCII', 'ignore').decode('ASCII')
         fname = os.path.basename(fname.replace('\\', os.path.sep))
         fname = settings.re.sub(r'[^a-zA-Z0-9-_.\s]', '', fname).strip()
         fname = settings.re.sub(r'[-\s]+', '-', fname).strip('.-')

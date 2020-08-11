@@ -2,15 +2,20 @@
 ###############################################################################
 # Routing ######################################################################
 ###############################################################################
+from wsgi_framework import exceptions
+from wsgi_framework import settings
+from wsgi_framework import commons
+from wsgi_framework import http_wsgi
 
 
-class RouteError(BottleException):
+class RouteError(exceptions.BottleException):
     """ This is a base class for all routing related exceptions """
 
 
-class RouteReset(BottleException):
+class RouteReset(exceptions.BottleException):
     """ If raised by a plugin or request handler, the route is reset and all
         plugins are re-applied. """
+
 
 class RouterUnknownModeError(RouteError): pass
 
@@ -27,7 +32,7 @@ def _re_flatten(p):
     ''' Turn all capturing groups in a regular expression pattern into
         non-capturing groups. '''
     if '(' not in p: return p
-    return re.sub(r'(\\*)(\(\?P<[^>]+>|\((?!\?))',
+    return settings.re.sub(r'(\\*)(\(\?P<[^>]+>|\((?!\?))',
         lambda m: m.group(0) if len(m.group(1)) % 2 else m.group(1) + '(?:', p)
 
 
@@ -72,7 +77,7 @@ class Router(object):
         The first element is a string, the last two are callables or None. '''
         self.filters[name] = func
 
-    rule_syntax = re.compile('(\\\\*)'\
+    rule_syntax = settings.re.compile('(\\\\*)'\
         '(?:(?::([a-zA-Z_][a-zA-Z_0-9]*)?()(?:#(.*?)#)?)'\
           '|(?:<([a-zA-Z_][a-zA-Z_0-9]*)?(?::([a-zA-Z_]*)'\
             '(?::((?:\\\\.|[^\\\\>]+)+)?)?)?>))')
@@ -118,7 +123,7 @@ class Router(object):
                 if in_filter: filters.append((key, in_filter))
                 builder.append((key, out_filter or str))
             elif key:
-                pattern += re.escape(key)
+                pattern += settings.re.escape(key)
                 builder.append((None, key))
 
         self.builder[rule] = builder
@@ -130,10 +135,10 @@ class Router(object):
             return
 
         try:
-            re_pattern = re.compile('^(%s)$' % pattern)
+            re_pattern = settings.re.compile('^(%s)$' % pattern)
             re_match = re_pattern.match
-        except re.error:
-            raise RouteSyntaxError("Could not add Route: %s (%s)" % (rule, _e()))
+        except settings.re.error:
+            raise RouteSyntaxError("Could not add Route: %s (%s)" % (rule, settings._e()))
 
         if filters:
             def getargs(path):
@@ -142,7 +147,7 @@ class Router(object):
                     try:
                         url_args[name] = wildcard_filter(url_args[name])
                     except ValueError:
-                        raise HTTPError(400, 'Path has wrong format.')
+                        raise http_wsgi.HTTPError(400, 'Path has wrong format.')
                 return url_args
         elif re_pattern.groupindex:
             def getargs(path):
@@ -154,9 +159,9 @@ class Router(object):
         whole_rule = (rule, flatpat, target, getargs)
 
         if (flatpat, method) in self._groups:
-            if DEBUG:
+            if settings.DEBUG:
                 msg = 'Route <%s %s> overwrites a previously defined route'
-                warnings.warn(msg % (method, rule), RuntimeWarning)
+                settings.warnings.warn(msg % (method, rule), RuntimeWarning)
             self.dyna_routes[method][self._groups[flatpat, method]] = whole_rule
         else:
             self.dyna_routes.setdefault(method, []).append(whole_rule)
@@ -172,7 +177,7 @@ class Router(object):
             some = all_rules[x:x+maxgroups]
             combined = (flatpat for (_, flatpat, _, _) in some)
             combined = '|'.join('(^%s$)' % flatpat for flatpat in combined)
-            combined = re.compile(combined).match
+            combined = settings.re.compile(combined).match
             rules = [(target, getargs) for (_, _, target, getargs) in some]
             comborules.append((combined, rules))
 
@@ -183,9 +188,9 @@ class Router(object):
         try:
             for i, value in enumerate(anons): query['anon%d'%i] = value
             url = ''.join([f(query.pop(n)) if n else f for (n,f) in builder])
-            return url if not query else url+'?'+urlencode(query)
+            return url if not query else url+'?'+settings.urlencode(query)
         except KeyError:
-            raise RouteBuildError('Missing URL argument: %r' % _e().args[0])
+            raise RouteBuildError('Missing URL argument: %r' % settings._e().args[0])
 
     def match(self, environ):
         ''' Return a (target, url_agrs) tuple or raise HTTPError(400/404/405). '''
@@ -221,10 +226,10 @@ class Router(object):
                     allowed.add(method)
         if allowed:
             allow_header = ",".join(sorted(allowed))
-            raise HTTPError(405, "Method not allowed.", Allow=allow_header)
+            raise http_wsgi.HTTPError(405, "Method not allowed.", Allow=allow_header)
 
         # No matching route and no alternative method found. We give up
-        raise HTTPError(404, "Not found: " + repr(path))
+        raise http_wsgi.HTTPError(404, "Not found: " + repr(path))
 
 
 
@@ -256,15 +261,15 @@ class Route(object):
         #: Additional keyword arguments passed to the :meth:`Bottle.route`
         #: decorator are stored in this dictionary. Used for route-specific
         #: plugin configuration and meta-data.
-        self.config = ConfigDict().load_dict(config, make_namespaces=True)
+        self.config = commons.ConfigDict().load_dict(config, make_namespaces=True)
 
     def __call__(self, *a, **ka):
-        depr("Some APIs changed to return Route() instances instead of"\
+        settings.depr("Some APIs changed to return Route() instances instead of"\
              " callables. Make sure to use the Route.call method and not to"\
              " call Route instances directly.") #0.12
         return self.call(*a, **ka)
 
-    @cached_property
+    @commons.cached_property
     def call(self):
         ''' The route callback with all plugins applied. This property is
             created on demand and then cached to speed up subsequent requests.'''
@@ -281,7 +286,7 @@ class Route(object):
 
     @property
     def _context(self):
-        depr('Switch to Plugin API v2 and access the Route object directly.')  #0.12
+        settings.depr('Switch to Plugin API v2 and access the Route object directly.')  #0.12
         return dict(rule=self.rule, method=self.method, callback=self.callback,
                     name=self.name, app=self.app, config=self.config,
                     apply=self.plugins, skip=self.skiplist)
@@ -310,15 +315,15 @@ class Route(object):
             except RouteReset: # Try again with changed configuration.
                 return self._make_callback()
             if not callback is self.callback:
-                update_wrapper(callback, self.callback)
+                settings.update_wrapper(callback, self.callback)
         return callback
 
     def get_undecorated_callback(self):
         ''' Return the callback. If the callback is a decorated function, try to
             recover the original function. '''
         func = self.callback
-        func = getattr(func, '__func__' if py3k else 'im_func', func)
-        closure_attr = '__closure__' if py3k else 'func_closure'
+        func = getattr(func, '__func__' if settings.py3k else 'im_func', func)
+        closure_attr = '__closure__' if settings.py3k else 'func_closure'
         while hasattr(func, closure_attr) and getattr(func, closure_attr):
             func = getattr(func, closure_attr)[0].cell_contents
         return func
@@ -327,7 +332,7 @@ class Route(object):
         ''' Return a list of argument names the callback (most likely) accepts
             as keyword arguments. If the callback is a decorated function, try
             to recover the original function before inspection. '''
-        return getargspec(self.get_undecorated_callback())[0]
+        return settings.getargspec(self.get_undecorated_callback())[0]
 
     def get_config(self, key, default=None):
         ''' Lookup a config field and return its value, first checking the

@@ -1,9 +1,12 @@
-import bottle
 
 
+from wsgi_framework.routings import Route, run, template
 
+@route('/hello/<name>')
+def index(name):
+    return template('<b>Hello {{name}}</b>!', name=name)
 
-
+run(host='localhost', port=8080)
 
 
 
