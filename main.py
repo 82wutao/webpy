@@ -1,12 +1,23 @@
+# from bottle import route, run, template
+#
+# @route('/hello/<name>')
+# def index(name):
+#     return template('<b>Hello {{name}}</b>!', name=name)
+#
+# run(host='localhost', port=8080)
+#
+#
 
 
-from wsgi_framework.routings import Route, run, template
+from wsgi_framework import applications
+from wsgi_framework import template_adapters
 
-@route('/hello/<name>')
+
+@applications.route('/hello/<name>')
 def index(name):
-    return template('<b>Hello {{name}}</b>!', name=name)
+    return template_adapters.template('<b>Hello {{name}}</b>!', name=name)
 
-run(host='localhost', port=8080)
+applications.run(host='localhost', port=8080)
 
 
 
