@@ -111,7 +111,8 @@ class Router(object):
         for key, mode, conf in self._itertokens(rule):
             if mode:
                 is_static = False
-                if mode == 'default': mode = self.default_filter
+                if mode == 'default':
+                    mode = self.default_filter
                 mask, in_filter, out_filter = self.filters[mode](conf)
                 if not key:
                     pattern += '(?:%s)' % mask
@@ -120,14 +121,16 @@ class Router(object):
                 else:
                     pattern += '(?P<%s>%s)' % (key, mask)
                     keys.append(key)
-                if in_filter: filters.append((key, in_filter))
+                if in_filter:
+                    filters.append((key, in_filter))
                 builder.append((key, out_filter or str))
             elif key:
                 pattern += settings.re.escape(key)
                 builder.append((None, key))
 
         self.builder[rule] = builder
-        if name: self.builder[name] = builder
+        if name:
+            self.builder[name] = builder
 
         if is_static and not self.strict_order:
             self.static.setdefault(method, {})

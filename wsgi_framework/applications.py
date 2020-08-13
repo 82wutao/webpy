@@ -38,7 +38,7 @@ class Bottle(object):
         self.resources = commons.ResourceManager()
 
         self.routes = [] # List of installed :class:`Route` instances.
-        self.router = routings.Router() # Maps requests to :class:`Route` instances.
+        self.router = routings.Router()  # Maps requests to :class:`Route` instances.
         self.error_handler = {}
 
         # Core plugins
@@ -244,12 +244,14 @@ class Bottle(object):
             Any additional keyword arguments are stored as route-specific
             configuration and passed to plugins (see :meth:`Plugin.apply`).
         """
-        if callable(path): path, callback = None, path
+        if callable(path):
+            path, callback = None, path
         plugins = settings.makelist(apply)
         skiplist = settings.makelist(skip)
         def decorator(callback):
             # TODO: Documentation and tests
-            if isinstance(callback, settings.basestring): callback = load(callback)
+            if isinstance(callback, settings.basestring):
+                callback = load(callback)
             for rule in settings.makelist(path) or http_wsgi.yieldroutes(callback):
                 for verb in settings.makelist(method):
                     verb = verb.upper()
@@ -333,9 +335,8 @@ class Bottle(object):
                 http_wsgi.response['Content-Length'] = 0
             return []
         # Join lists of byte or unicode strings. Mixed lists are NOT supported
-        if isinstance(out, (tuple, list))\
-        and isinstance(out[0], (bytes, settings.unicode)):
-            out = out[0][0:0].join(out) # b'abc'[0:0] -> b''
+        if isinstance(out, (tuple, list)) and isinstance(out[0], (bytes, settings.unicode)):
+            out = out[0][0:0].join(out)  # b'abc'[0:0] -> b''
         # Encode unicode strings
         if isinstance(out, settings.unicode):
             out = out.encode(http_wsgi.response.charset)
@@ -397,9 +398,9 @@ class Bottle(object):
         try:
             out = self._cast(self._handle(environ))
             # rfc2616 section 4.3
-            if http_wsgi.response._status_code in (100, 101, 204, 304)\
-            or environ['REQUEST_METHOD'] == 'HEAD':
-                if hasattr(out, 'close'): out.close()
+            if http_wsgi.response._status_code in (100, 101, 204, 304) or environ['REQUEST_METHOD'] == 'HEAD':
+                if hasattr(out, 'close'):
+                    out.close()
                 out = []
             start_response(http_wsgi.response._status_line, http_wsgi.response.headerlist)
             return out
@@ -548,9 +549,12 @@ def load(target, **namespace):
         local variables. Example: ``import_string('re:compile(x)', x='[a-z]')``
     """
     module, target = target.split(":", 1) if ':' in target else (target, None)
-    if module not in sys.modules: __import__(module)
-    if not target: return sys.modules[module]
-    if target.isalnum(): return getattr(sys.modules[module], target)
+    if module not in sys.modules:
+        __import__(module)
+    if not target:
+        return sys.modules[module]
+    if target.isalnum():
+        return getattr(sys.modules[module], target)
     package_name = module.split('.')[0]
     namespace[package_name] = sys.modules[package_name]
     return eval('%s.%s' % (module, target), namespace)
@@ -589,20 +593,21 @@ def run(app=None, server='wsgiref', host='127.0.0.1', port=8080,
         :param quiet: Suppress output to stdout and stderr? (default: False)
         :param options: Options passed to the server adapter.
      """
-    if settings.NORUN: return
-    if reloader and not os.environ.get('BOTTLE_CHILD'):
+    if settings.NORUN:  # 不使用run的方法来启动，使用load_app
+        return
+    if reloader and not os.environ.get('BOTTLE_CHILD'):  # 如果是重新加载server 且环境变量有BOTTLE_CHILD 设定，重启server
         try:
             lockfile = None
             fd, lockfile = settings.tempfile.mkstemp(prefix='bottle.', suffix='.lock')
-            os.close(fd) # We only need this file to exist. We never write to it
+            os.close(fd)  # We only need this file to exist. We never write to it
             while os.path.exists(lockfile):
                 args = [sys.executable] + sys.argv
                 environ = os.environ.copy()
                 environ['BOTTLE_CHILD'] = 'true'
                 environ['BOTTLE_LOCKFILE'] = lockfile
                 p = settings.subprocess.Popen(args, env=environ)
-                while p.poll() is None: # Busy wait...
-                    os.utime(lockfile, None) # I am alive!
+                while p.poll() is None:  # Busy wait...
+                    os.utime(lockfile, None)  # I am alive!
                     time.sleep(interval)
                 if p.poll() != 3:
                     if os.path.exists(lockfile): os.unlink(lockfile)
@@ -615,7 +620,8 @@ def run(app=None, server='wsgiref', host='127.0.0.1', port=8080,
         return
 
     try:
-        if debug is not None: _debug(debug)
+        if debug is not None:
+            _debug(debug)
         app = app or default_app()
         if isinstance(app, settings.basestring):
             app = load_app(app)
@@ -654,7 +660,8 @@ def run(app=None, server='wsgiref', host='127.0.0.1', port=8080,
     except (SystemExit, MemoryError):
         raise
     except:
-        if not reloader: raise
+        if not reloader:
+            raise
         if not getattr(server, 'quiet', quiet):
             settings.print_exc()
         time.sleep(interval)
